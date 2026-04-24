@@ -1,0 +1,14 @@
+@import "tailwindcss";
+@custom-variant dark (&:where(.dark, .dark *));
+
+body {
+  @apply bg-slate-950 text-slate-100 antialiased transition-colors duration-300;
+}
+
+#root {
+  @apply min-h-screen;
+}
+
+* {
+  @apply transition-colors duration-200;
+}
