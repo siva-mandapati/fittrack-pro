@@ -1,6 +1,12 @@
 const WorkoutLog = require("../models/WorkoutLog");
 const User = require("../models/User");
 
+const DIFFICULTY_MET = {
+  easy: 3.5,
+  medium: 5.0,
+  hard: 7.0,
+};
+
 const getStartOfDay = (date) => {
   const d = new Date(date);
   d.setHours(0, 0, 0, 0);
@@ -15,10 +21,21 @@ const calculateOneRM = (weightUsed, repsCompleted) => {
 
 const normalizeExerciseName = (exerciseName) => String(exerciseName || "").trim().toLowerCase();
 
+const calculateSessionCalories = (entries, userWeight, duration) => {
+  const safeDuration = Number(duration) || 30;
+  const safeWeight = Number(userWeight) > 0 ? Number(userWeight) : 70;
+  const mets =
+    entries.length > 0
+      ? entries.map((entry) => DIFFICULTY_MET[String(entry.difficulty).toLowerCase()] || 5.0)
+      : [5.0];
+  const avgMet = mets.reduce((sum, value) => sum + value, 0) / mets.length;
+  return Number((avgMet * safeWeight * (safeDuration / 60)).toFixed(2));
+};
+
 const logWorkout = async (req, res) => {
   try {
     const userId = req.user?.id;
-    const { entries } = req.body;
+    const { entries, duration = 45 } = req.body;
 
     if (!userId) {
       return res.status(401).json({ message: "Not authorized." });
@@ -55,15 +72,26 @@ const logWorkout = async (req, res) => {
       });
     }
 
+    const user = await User.findById(userId);
+    if (!user) {
+      return res.status(404).json({ message: "User not found." });
+    }
+
+    const sessionCalories = calculateSessionCalories(entries, user.weight, duration);
+    const caloriesPerEntry = Number((sessionCalories / entries.length).toFixed(2));
+
     const preparedEntries = entries.map((entry) => ({
       ...entry,
       oneRM: calculateOneRM(entry.weightUsed, entry.repsCompleted),
       suggestedNextWeight: 0,
+      caloriesBurned: caloriesPerEntry,
     }));
 
     const workoutLog = await WorkoutLog.create({
       userId,
       date: req.body.date ? new Date(req.body.date) : new Date(),
+      duration: Number(duration) || 30,
+      caloriesBurned: sessionCalories,
       entries: preparedEntries,
     });
 
@@ -93,11 +121,6 @@ const logWorkout = async (req, res) => {
       await workoutLog.save();
     }
 
-    const user = await User.findById(userId);
-    if (!user) {
-      return res.status(404).json({ message: "User not found." });
-    }
-
     const todayStart = getStartOfDay(new Date());
     let streak = 1;
 
@@ -125,6 +148,7 @@ const logWorkout = async (req, res) => {
       workoutLog,
       streak,
       longestStreak: user.longestWorkoutStreak,
+      caloriesBurned: sessionCalories,
     });
   } catch (error) {
     return res
@@ -153,11 +177,21 @@ const getWorkoutHistory = async (req, res) => {
       User.findById(userId).select("workoutStreak longestWorkoutStreak"),
     ]);
 
+    let currentStreak = user?.workoutStreak || 0;
+    if (history.length > 0) {
+      const latestDate = getStartOfDay(history[0].date || history[0].createdAt);
+      const todayStart = getStartOfDay(new Date());
+      const diffDays = Math.floor((todayStart.getTime() - latestDate.getTime()) / (24 * 60 * 60 * 1000));
+      if (diffDays > 1) {
+        currentStreak = 0;
+      }
+    }
+
     return res.status(200).json({
       count: history.length,
       history,
       streak: {
-        current: user?.workoutStreak || 0,
+        current: currentStreak,
         longest: user?.longestWorkoutStreak || 0,
       },
     });
@@ -240,9 +274,69 @@ const exportWorkoutHistoryCsv = async (req, res) => {
   }
 };
 
+const getCaloriesStats = async (req, res) => {
+  try {
+    const requesterId = req.user?.id;
+    if (!requesterId) {
+      return res.status(401).json({ message: "Not authorized." });
+    }
+
+    const now = new Date();
+    const startOfWeek = new Date(now);
+    const day = startOfWeek.getDay();
+    const diff = day === 0 ? 6 : day - 1;
+    startOfWeek.setDate(startOfWeek.getDate() - diff);
+    startOfWeek.setHours(0, 0, 0, 0);
+
+    const [overall, thisWeek] = await Promise.all([
+      WorkoutLog.aggregate([
+        { $match: { userId: req.user._id } },
+        {
+          $group: {
+            _id: null,
+            totalCaloriesBurned: { $sum: { $ifNull: ["$caloriesBurned", 0] } },
+            sessionCount: { $sum: 1 },
+          },
+        },
+      ]),
+      WorkoutLog.aggregate([
+        {
+          $match: {
+            userId: req.user._id,
+            date: { $gte: startOfWeek, $lte: now },
+          },
+        },
+        {
+          $group: {
+            _id: null,
+            caloriesThisWeek: { $sum: { $ifNull: ["$caloriesBurned", 0] } },
+          },
+        },
+      ]),
+    ]);
+
+    const totalCaloriesBurned = Number((overall[0]?.totalCaloriesBurned || 0).toFixed(2));
+    const sessionCount = overall[0]?.sessionCount || 0;
+    const avgCaloriesPerSession =
+      sessionCount > 0 ? Number((totalCaloriesBurned / sessionCount).toFixed(2)) : 0;
+    const caloriesThisWeek = Number((thisWeek[0]?.caloriesThisWeek || 0).toFixed(2));
+
+    return res.status(200).json({
+      totalCaloriesBurned,
+      avgCaloriesPerSession,
+      caloriesThisWeek,
+    });
+  } catch (error) {
+    return res
+      .status(500)
+      .json({ message: "Failed to fetch calorie stats.", error: error.message });
+  }
+};
+
 module.exports = {
   logWorkout,
   getWorkoutHistory,
   deleteWorkoutSession,
   exportWorkoutHistoryCsv,
+  getCaloriesStats,
 };

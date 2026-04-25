@@ -49,9 +49,10 @@ const RegisterPage = () => {
   };
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-slate-950 px-4">
+    <div className="animate-fade-in flex min-h-screen items-center justify-center bg-slate-950 px-4">
       <Card>
         <div className="w-full max-w-md">
+          <p className="mb-4 text-center text-lg font-bold text-indigo-300">💪 FitTrack Pro</p>
           <h1 className="mb-1 text-2xl font-bold text-white">Create account</h1>
           <p className="mb-5 text-sm text-slate-400">Start tracking your workouts today.</p>
           <form onSubmit={handleSubmit} className="space-y-3">

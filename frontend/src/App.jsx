@@ -4,6 +4,7 @@ import ProtectedRoute from "./components/ProtectedRoute";
 import AnalysisPage from "./pages/AnalysisPage";
 import DashboardPage from "./pages/DashboardPage";
 import HistoryPage from "./pages/HistoryPage";
+import Landing from "./pages/Landing";
 import LoginPage from "./pages/LoginPage";
 import RegisterPage from "./pages/RegisterPage";
 import WorkoutPage from "./pages/WorkoutPage";
@@ -11,6 +12,7 @@ import WorkoutPage from "./pages/WorkoutPage";
 const App = () => {
   return (
     <Routes>
+      <Route path="/" element={<Landing />} />
       <Route path="/login" element={<LoginPage />} />
       <Route path="/register" element={<RegisterPage />} />
 
@@ -20,11 +22,10 @@ const App = () => {
           <Route path="/workout" element={<WorkoutPage />} />
           <Route path="/history" element={<HistoryPage />} />
           <Route path="/analysis" element={<AnalysisPage />} />
-          <Route path="/" element={<Navigate to="/dashboard" replace />} />
         </Route>
       </Route>
 
-      <Route path="*" element={<Navigate to="/" replace />} />
+      <Route path="*" element={<Navigate to="/dashboard" replace />} />
     </Routes>
   );
 };

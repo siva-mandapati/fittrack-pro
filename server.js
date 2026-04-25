@@ -21,6 +21,7 @@ const server = http.createServer(app);
 app.use(cors({
   origin: [
     'http://localhost:5173',
+    'http://localhost:5174',
     'http://localhost:3000',
     'https://fittrack-pro-xi.vercel.app',
     'https://fittrack-e062elvjc-siva-mandapatis-projects.vercel.app'

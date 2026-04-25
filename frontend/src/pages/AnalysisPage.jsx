@@ -4,11 +4,13 @@ import {
   getProgressDashboardStatsRequest,
   getWeeklyMuscleVolumeRequest,
 } from "../api/progressApi";
+import { getWorkoutHistoryRequest } from "../api/workoutApi";
 import Button from "../components/Button";
 import Card from "../components/Card";
 import Loader from "../components/Loader";
 import ProgressCharts from "../components/ProgressCharts";
 import { useToast } from "../context/ToastContext";
+import useAuth from "../hooks/useAuth";
 import {
   Bar,
   BarChart,
@@ -26,20 +28,33 @@ const AnalysisPage = () => {
   const [data, setData] = useState(null);
   const [aggregationStats, setAggregationStats] = useState(null);
   const [weeklyMuscleVolume, setWeeklyMuscleVolume] = useState([]);
+  const [calorieHistory, setCalorieHistory] = useState([]);
   const { error, success } = useToast();
+  const { user } = useAuth();
 
   const runAnalysis = async () => {
     setLoading(true);
     setErrorState("");
     try {
-      const [analysisRes, statsRes, weeklyVolumeRes] = await Promise.all([
+      const [analysisRes, statsRes, weeklyVolumeRes, historyRes] = await Promise.all([
         analyzeProgressRequest(),
         getProgressDashboardStatsRequest(),
         getWeeklyMuscleVolumeRequest(),
+        user?.id ? getWorkoutHistoryRequest(user.id) : Promise.resolve({ data: { history: [] } }),
       ]);
+      console.log("Full API response:", analysisRes.data);
+      console.log("aiInsights from response:", analysisRes.data?.aiInsights);
       setData(analysisRes.data);
       setAggregationStats(statsRes.data);
       setWeeklyMuscleVolume(weeklyVolumeRes.data?.weeklyMuscleVolume || []);
+      const calorieRows = (historyRes.data?.history || [])
+        .slice()
+        .reverse()
+        .map((session, idx) => ({
+          name: `S${idx + 1}`,
+          calories: Math.round(session.caloriesBurned || 0),
+        }));
+      setCalorieHistory(calorieRows);
       success("Analysis generated successfully.");
     } catch (err) {
       const msg = err.response?.data?.message || "Failed to analyze progress.";
@@ -63,7 +78,7 @@ const AnalysisPage = () => {
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h1 className="text-3xl font-bold text-white">Progress Analysis</h1>
-          <p className="text-slate-400">Generate AI-backed training insights.</p>
+          <p className="text-slate-400">Track and analyze your training progress.</p>
         </div>
         <Button onClick={runAnalysis} loading={loading}>
           Analyze Progress
@@ -75,7 +90,6 @@ const AnalysisPage = () => {
           {errorState}
         </div>
       )}
-      {loading && <Loader label="Analyzing workout trends..." />}
 
       {data && (
         <>
@@ -113,6 +127,8 @@ const AnalysisPage = () => {
               <p className="text-sm text-slate-400">No recommendations generated yet.</p>
             )}
           </Card>
+
+
 
           <Card title="Updated Plan">
             <div className="space-y-4">
@@ -184,6 +200,28 @@ const AnalysisPage = () => {
               </div>
             ) : (
               <p className="text-sm text-slate-400">No weekly muscle volume data available yet.</p>
+            )}
+          </Card>
+
+          <Card title="Calorie Burn History">
+            {calorieHistory.length ? (
+              <div className="h-72 w-full">
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={calorieHistory}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="rgba(100,116,139,0.2)" />
+                    <XAxis dataKey="name" stroke="#94a3b8" tick={{ fontSize: 12 }} />
+                    <YAxis stroke="#94a3b8" tick={{ fontSize: 12 }} />
+                    <Tooltip
+                      contentStyle={{ backgroundColor: "#0f172a", border: "1px solid #334155" }}
+                      labelStyle={{ color: "#e2e8f0" }}
+                    />
+                    <Legend />
+                    <Bar dataKey="calories" name="Calories Burned" fill="#f97316" radius={[6, 6, 0, 0]} />
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+            ) : (
+              <p className="text-sm text-slate-400">No calorie history available yet.</p>
             )}
           </Card>
         </>

@@ -37,6 +37,11 @@ const workoutEntrySchema = new mongoose.Schema(
       default: 0,
       min: 0,
     },
+    caloriesBurned: {
+      type: Number,
+      default: 0,
+      min: 0,
+    },
   },
   { _id: false }
 );
@@ -54,6 +59,16 @@ const workoutLogSchema = new mongoose.Schema(
       required: true,
       default: Date.now,
       index: true,
+    },
+    duration: {
+      type: Number,
+      default: 30,
+      min: 1,
+    },
+    caloriesBurned: {
+      type: Number,
+      default: 0,
+      min: 0,
     },
     entries: {
       type: [workoutEntrySchema],

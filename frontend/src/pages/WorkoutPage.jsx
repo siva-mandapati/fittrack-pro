@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useNavigate } from "react-router-dom";
 import Button from "../components/Button";
 import Card from "../components/Card";
 import Input from "../components/Input";
@@ -15,10 +16,24 @@ const createEntry = () => ({
 });
 
 const WorkoutPage = () => {
+  const navigate = useNavigate();
   const [entries, setEntries] = useState([createEntry()]);
+  const [duration, setDuration] = useState(45);
   const [loading, setLoading] = useState(false);
   const [errorState, setErrorState] = useState("");
+  const [showSuccessAnimation, setShowSuccessAnimation] = useState(false);
   const { success, error } = useToast();
+
+  const quotes = [
+    "Push harder than yesterday if you want a different tomorrow.",
+    "Small progress is still progress.",
+    "Success starts with self-discipline.",
+    "Your body can stand almost anything. It’s your mind that you have to convince.",
+    "Consistency beats intensity.",
+    "Train insane or remain the same.",
+    "Don’t limit your challenges. Challenge your limits.",
+  ];
+  const quoteOfDay = quotes[new Date().getDay()];
 
   const updateEntry = (index, field, value) => {
     setEntries((prev) =>
@@ -52,6 +67,7 @@ const WorkoutPage = () => {
     }
 
     const payload = {
+      duration: Number(duration) || 45,
       entries: entries.map((entry) => ({
         exerciseName: entry.exerciseName.trim(),
         setsCompleted: Number(entry.setsCompleted),
@@ -66,6 +82,12 @@ const WorkoutPage = () => {
       const { data } = await logWorkoutRequest(payload);
       success(`Workout logged successfully. Current streak: ${data.streak}`);
       setEntries([createEntry()]);
+      setDuration(45);
+      setShowSuccessAnimation(true);
+      setTimeout(() => {
+        setShowSuccessAnimation(false);
+        navigate("/dashboard");
+      }, 2000);
     } catch (err) {
       const msg = err.response?.data?.message || "Failed to log workout.";
       setErrorState(msg);
@@ -78,6 +100,9 @@ const WorkoutPage = () => {
   return (
     <div className="space-y-6">
       <h1 className="text-3xl font-bold text-white">Log Workout</h1>
+      <Card>
+        <p className="text-sm italic text-indigo-200">"{quoteOfDay}"</p>
+      </Card>
 
       <Card title="Session Entries">
         {errorState && (
@@ -142,6 +167,14 @@ const WorkoutPage = () => {
               />
             </div>
           ))}
+          <Input
+            type="number"
+            min="1"
+            label="Session Duration (minutes)"
+            className="w-full md:w-56"
+            value={duration}
+            onChange={(e) => setDuration(e.target.value)}
+          />
           <div className="flex flex-wrap gap-3">
             <Button
               type="button"
@@ -157,6 +190,12 @@ const WorkoutPage = () => {
           </div>
         </form>
         {loading && <Loader label="Submitting workout..." />}
+        {showSuccessAnimation && (
+          <div className="mt-4 rounded-xl border border-emerald-500/30 bg-emerald-500/15 p-4 text-center text-emerald-300">
+            <p className="text-2xl">✅</p>
+            <p className="font-semibold">Workout Logged!</p>
+          </div>
+        )}
       </Card>
     </div>
   );

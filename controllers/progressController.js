@@ -1,5 +1,6 @@
 const WorkoutLog = require("../models/WorkoutLog");
 const WorkoutPlan = require("../models/WorkoutPlan");
+const User = require("../models/User");
 
 const DAYS_14_MS = 14 * 24 * 60 * 60 * 1000;
 const WEIGHT_STEP_KG = 2.5;
@@ -298,6 +299,42 @@ const buildPlanByLevel = (level, daysPerWeek) => {
   };
 };
 
+const safeParseGeminiJson = (text) => {
+  if (!text) return null;
+  let cleaned = String(text).trim();
+  cleaned = cleaned.replace(/```json|```/gi, "").trim();
+  const firstBrace = cleaned.indexOf("{");
+  const lastBrace = cleaned.lastIndexOf("}");
+  if (firstBrace !== -1 && lastBrace !== -1) {
+    cleaned = cleaned.slice(firstBrace, lastBrace + 1);
+  }
+
+  try {
+    return JSON.parse(cleaned);
+  } catch {
+    try {
+      const normalized = cleaned
+        .replace(/([{,]\s*)'([^']+?)'\s*:/g, '$1"$2":')
+        .replace(/:\s*'([^']*?)'/g, ': "$1"');
+      return JSON.parse(normalized);
+    } catch {
+      return null;
+    }
+  }
+};
+
+const buildRecentWorkoutSummary = (sessions) => {
+  return sessions.slice(0, 5).map((session) => ({
+    date: session.date || session.createdAt,
+    exercises: (session.entries || []).map((entry) => ({
+      exerciseName: entry.exerciseName,
+      repsCompleted: entry.repsCompleted,
+      setsCompleted: entry.setsCompleted,
+      weightUsed: entry.weightUsed,
+    })),
+  }));
+};
+
 const analyzeProgress = async (req, res) => {
   try {
     const userId = req.user?.id;
@@ -324,7 +361,8 @@ const analyzeProgress = async (req, res) => {
       };
     };
 
-    const [existingPlan, recentLogs, previousLogs] = await Promise.all([
+    const [existingPlan, recentLogs, previousLogs, userProfile, totalVolumeAgg, totalCaloriesAgg, mostTrained] =
+      await Promise.all([
       WorkoutPlan.findOne({ user: userId }).sort({ createdAt: -1 }),
       WorkoutLog.find(byUserAndDateRange(recentStart, now, true)).sort({
         date: -1,
@@ -334,6 +372,46 @@ const analyzeProgress = async (req, res) => {
         date: -1,
         createdAt: -1,
       }),
+      User.findById(userId).select("level daysPerWeek workoutStreak"),
+      WorkoutLog.aggregate([
+        { $match: { userId: req.user._id } },
+        { $unwind: "$entries" },
+        {
+          $group: {
+            _id: null,
+            totalVolume: {
+              $sum: {
+                $multiply: [
+                  { $ifNull: ["$entries.setsCompleted", 0] },
+                  { $ifNull: ["$entries.repsCompleted", 0] },
+                  { $ifNull: ["$entries.weightUsed", 0] },
+                ],
+              },
+            },
+          },
+        },
+      ]),
+      WorkoutLog.aggregate([
+        { $match: { userId: req.user._id } },
+        {
+          $group: {
+            _id: null,
+            totalCalories: { $sum: { $ifNull: ["$caloriesBurned", 0] } },
+          },
+        },
+      ]),
+      WorkoutLog.aggregate([
+        { $match: { userId: req.user._id } },
+        { $unwind: "$entries" },
+        {
+          $group: {
+            _id: "$entries.exerciseName",
+            count: { $sum: 1 },
+          },
+        },
+        { $sort: { count: -1 } },
+        { $limit: 1 },
+      ]),
     ]);
 
     let latestPlan = existingPlan;

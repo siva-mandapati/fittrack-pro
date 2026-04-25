@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { Link } from "react-router-dom";
 import {
   deleteWorkoutSessionRequest,
   exportWorkoutHistoryCsvRequest,
@@ -115,7 +116,14 @@ const HistoryPage = () => {
 
       {!loading && !errorState && history.length === 0 && (
         <Card>
-          <p className="text-sm text-slate-400">No workouts logged yet.</p>
+          <div className="space-y-3 text-center">
+            <p className="text-6xl">🏋️</p>
+            <p className="text-lg font-semibold text-white">No workouts logged yet</p>
+            <p className="text-sm text-slate-400">Start tracking your first workout!</p>
+            <Link to="/workout">
+              <Button>Log Your First Workout</Button>
+            </Link>
+          </div>
         </Card>
       )}
 
@@ -123,6 +131,7 @@ const HistoryPage = () => {
         history.map((session) => (
           <Card
             key={session._id}
+            className="animate-fade-in"
             title={new Date(session.date || session.createdAt).toLocaleString()}
             action={
               <Button
@@ -145,7 +154,13 @@ const HistoryPage = () => {
                   >
                     <span className="font-semibold">{entry.exerciseName}</span> - {entry.setsCompleted} sets x{" "}
                     {entry.repsCompleted} reps @ {entry.weightUsed}kg | 1RM: {entry.oneRM || 0}
-                    {isPR && <span className="ml-2 rounded-full bg-amber-400/20 px-2 py-0.5 text-xs">🏆 PR</span>}
+                    {" | "}
+                    🔥 {Math.round(entry.caloriesBurned || session.caloriesBurned || 0)} cal
+                    {isPR && (
+                      <span className="ml-2 rounded-full bg-gradient-to-r from-amber-300 to-yellow-500 px-2 py-0.5 text-xs text-slate-900">
+                        🏆 PR
+                      </span>
+                    )}
                   </li>
                 );
               })}
